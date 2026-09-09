@@ -1,0 +1,17 @@
+{
+  "name": "Braille & Gebaren Lezer",
+  "short_name": "Braille Lezer",
+  "description": "Leest Nederlandse braille live met de camera, vertaalt in beide richtingen en herkent vingerspelling/gebaren.",
+  "lang": "nl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b5fff",
+  "theme_color": "#0b5fff",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

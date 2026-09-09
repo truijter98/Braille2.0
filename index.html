@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b5fff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Braille Lezer">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Braille & Gebaren Lezer</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5b6470; --line: #d9dee5;
+    --accent: #0b5fff; --accent-ink: #ffffff; --ok: #0a7d3c; --warn: #b45309; --bad: #b3261e;
+    --braille: #1d4ed8; --focus: #f59e0b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1216; --panel: #181c22; --ink: #eef1f5; --muted: #a2abb8; --line: #2b323c;
+      --accent: #6ea0ff; --accent-ink: #0b1220; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --braille: #93b4ff; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: env(safe-area-inset-top) 0 0; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 10px 14px 6px; }
+  .brand h1 { font-size: 1.15rem; margin: 0; }
+  .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 1.1rem; font-weight: 700; }
+  nav { display: flex; overflow-x: auto; gap: 4px; padding: 0 8px 8px; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 8px 14px; border-radius: 999px; font-size: 0.95rem; min-height: 40px; cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  main { max-width: 980px; margin: 0 auto; padding: 12px 12px 40px; }
+  section[role="tabpanel"] { display: none; }
+  section[role="tabpanel"].active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .grow { flex: 1 1 auto; }
+  button.btn, label.btn { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 10px 14px; border-radius: 10px; font-size: 1rem; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn.danger { color: var(--bad); }
+  button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  select, input[type="text"], textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 44px; }
+  textarea { width: 100%; resize: vertical; min-height: 110px; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; }
+  .field label, .field .lbl { font-size: 0.85rem; color: var(--muted); }
+  .stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 3; max-height: 60vh; }
+  .stage video, .stage canvas, .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .stage canvas { pointer-events: none; }
+  .stage .hint { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 12px; background: rgba(0,0,0,.55); color: #fff; font-size: 0.9rem; }
+  .braille-out { font-size: 2rem; line-height: 1.4; color: var(--braille); word-break: break-all; white-space: pre-wrap; font-family: "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", "Noto Sans Symbols 2", system-ui, sans-serif; }
+  .text-out { font-size: 1.5rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; min-height: 1.4em; }
+  .status { font-size: 0.9rem; color: var(--muted); }
+  .status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.bad { color: var(--bad); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 0.85rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 0.85rem; color: var(--muted); }
+  .cellsvg { width: 22px; height: 33px; display: inline-block; vertical-align: middle; }
+  .cellsvg circle { fill: var(--line); } .cellsvg circle.on { fill: var(--braille); }
+  .alpha-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .alpha-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .alpha-item .sym { font-size: 1.4rem; font-weight: 600; min-width: 1.4em; }
+  .alpha-item .br { color: var(--braille); font-size: 1.5rem; }
+  .alpha-item small { color: var(--muted); }
+  .hist-item { border-top: 1px solid var(--line); padding: 10px 0; }
+  .hist-item:first-child { border-top: 0; }
+  .hist-item time { font-size: 0.8rem; color: var(--muted); }
+  .big-letter { font-size: 5rem; font-weight: 700; line-height: 1; text-align: center; min-height: 5rem; }
+  .ring { width: 64px; height: 64px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--line) 0); display: grid; place-items: center; margin: 0 auto; }
+  .ring span { width: 52px; height: 52px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-weight: 700; font-size: 1.4rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 0.9rem; }
+  .chip button { border: 0; background: transparent; color: var(--bad); font-size: 1rem; cursor: pointer; padding: 0 2px; min-width: 28px; min-height: 28px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .kbd { font-family: ui-monospace, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 600px) { .braille-out { font-size: 1.7rem; } .text-out { font-size: 1.3rem; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo" aria-hidden="true">⠃</div><h1>Braille & Gebaren Lezer</h1><span class="grow"></span><button class="btn" id="installBtn" hidden style="min-height:36px;padding:6px 10px">⬇ Installeren</button><span class="status" id="voiceStatus"></span></div>
+  <nav role="tablist" aria-label="Onderdelen">
+    <button role="tab" data-tab="camera" aria-selected="true">📷 Camera</button>
+    <button role="tab" data-tab="foto" aria-selected="false">🖼️ Foto</button>
+    <button role="tab" data-tab="vertaler" aria-selected="false">⇄ Vertaler</button>
+    <button role="tab" data-tab="gebaren" aria-selected="false">🤟 Gebaren</button>
+    <button role="tab" data-tab="alfabet" aria-selected="false">⠁ Alfabet</button>
+    <button role="tab" data-tab="geschiedenis" aria-selected="false">🕘 Geschiedenis</button>
+    <button role="tab" data-tab="help" aria-selected="false">? Help</button>
+  </nav>
+</header>
+<main>
+
+<!-- ================= CAMERA ================= -->
+<section id="tab-camera" role="tabpanel" class="active" aria-label="Braille live lezen met de camera">
+  <div class="card">
+    <div class="stage" id="camStage">
+      <video id="camVideo" playsinline muted autoplay></video>
+      <canvas id="camOverlay"></canvas>
+      <div class="hint" id="camHint">Druk op “Camera starten” en houd de braille recht en scherp in beeld.</div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="camStart">▶ Camera starten</button>
+      <button class="btn" id="camSwitch" title="Wissel tussen voor- en achtercamera">🔄 Wissel camera</button>
+      <button class="btn" id="camFreeze" disabled>⏸ Vastzetten</button>
+      <label class="btn"><input type="checkbox" id="camLive" checked> Live lezen</label>
+    </div>
+  </div>
+  <div class="card" id="settingsCard">
+    <h2>Herkenning instellen</h2>
+    <div class="row">
+      <div class="field"><label for="optMode">Soort braille</label>
+        <select id="optMode">
+          <option value="dark">Gedrukt: donkere punten op licht</option>
+          <option value="light">Gedrukt: lichte punten op donker</option>
+          <option value="relief">Reliëf (papier/verpakking, zijlicht)</option>
+        </select></div>
+      <div class="field"><label for="optSens">Gevoeligheid: <span id="optSensVal">50</span></label><input type="range" id="optSens" min="5" max="95" value="50"></div>
+      <div class="field"><label for="optDot">Puntgrootte (px in beeld): <span id="optDotVal">8</span></label><input type="range" id="optDot" min="3" max="30" value="8"></div>
+    </div>
+    <p class="status">Tip: bij reliëfbraille werkt licht van opzij (lamp of zon schuin op het papier) het best, zodat elke punt een lichte en een donkere kant krijgt. Stel de puntgrootte in op de grootte van één punt op het scherm.</p>
+  </div>
+  <div class="card" aria-live="polite">
+    <div class="row"><h2 class="grow">Resultaat</h2><span class="status" id="camStatus">Nog niets herkend</span></div>
+    <div class="braille-out" id="camBraille"></div>
+    <div class="text-out" id="camText"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="camSpeak">🔊 Voorlezen</button>
+      <button class="btn" id="camCopy">📋 Kopiëren</button>
+      <button class="btn" id="camSave">💾 Bewaren</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FOTO ================= -->
+<section id="tab-foto" role="tabpanel" aria-label="Braille uit een foto lezen">
+  <div class="card">
+    <div class="row">
+      <label class="btn primary" for="fotoFile">📁 Foto kiezen of maken</label>
+      <input type="file" id="fotoFile" accept="image/*" class="sr-only">
+      <button class="btn" id="fotoDemo" title="Maakt een testafbeelding met braille zodat je de herkenning kunt proberen">🧪 Testafbeelding</button>
+      <button class="btn" id="fotoRerun">↻ Opnieuw herkennen</button>
+    </div>
+    <div class="stage" id="fotoStage" style="margin-top:10px">
+      <img id="fotoImg" alt="Gekozen foto">
+      <canvas id="fotoOverlay"></canvas>
+      <div class="hint" id="fotoHint">Kies een foto van braille. Op de telefoon kun je direct een foto maken.</div>
+    </div>
+    <p class="status">De instellingen (soort braille, gevoeligheid, puntgrootte) staan op het tabblad Camera en gelden ook hier.</p>
+  </div>
+  <div class="card" aria-live="polite">
+    <div class="row"><h2 class="grow">Resultaat</h2><span class="status" id="fotoStatus"></span></div>
+    <div class="braille-out" id="fotoBraille"></div>
+    <div class="text-out" id="fotoText"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="fotoSpeak">🔊 Voorlezen</button>
+      <button class="btn" id="fotoCopy">📋 Kopiëren</button>
+      <button class="btn" id="fotoSave">💾 Bewaren</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= VERTALER ================= -->
+<section id="tab-vertaler" role="tabpanel" aria-label="Vertaler tussen Nederlands en braille">
+  <div class="card">
+    <div class="row">
+      <div class="field"><label for="dir">Richting</label>
+        <select id="dir">
+          <option value="t2b">Nederlands → braille</option>
+          <option value="b2t">Braille → Nederlands</option>
+        </select></div>
+      <button class="btn" id="dirSwap">⇄ Wissel</button>
+    </div>
+    <div class="field" style="margin-top:10px"><label for="srcText" id="srcLabel">Nederlandse tekst</label>
+      <textarea id="srcText" placeholder="Typ hier… de vertaling verschijnt direct."></textarea></div>
+    <div class="row" style="margin-top:6px">
+      <div class="chips" id="brailleKeys" aria-label="Braille-toetsen"></div>
+    </div>
+  </div>
+  <div class="card" aria-live="polite">
+    <div class="row"><h2 class="grow" id="outLabel">Braille</h2><span class="status" id="trStatus"></span></div>
+    <div class="braille-out" id="outBraille"></div>
+    <div class="text-out" id="outText"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="trSpeak">🔊 Voorlezen</button>
+      <button class="btn" id="trCopy">📋 Kopiëren</button>
+      <button class="btn" id="trSave">💾 Bewaren</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GEBAREN ================= -->
+<section id="tab-gebaren" role="tabpanel" aria-label="Gebaren en vingerspelling herkennen">
+  <div class="card">
+    <div class="stage" id="signStage">
+      <video id="signVideo" playsinline muted autoplay></video>
+      <canvas id="signOverlay"></canvas>
+      <div class="hint" id="signHint">Start de camera; het handmodel wordt eenmalig geladen (internet nodig, ±10 MB).</div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="signStart">▶ Camera starten</button>
+      <button class="btn" id="signSwitch">🔄 Wissel camera</button>
+      <span class="status" id="signStatus">Model nog niet geladen</span>
+    </div>
+  </div>
+  <div class="card" aria-live="polite">
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:0 0 120px">
+        <div class="ring" id="signRing"><span id="signLetter">–</span></div>
+        <div class="status" id="signConf" style="text-align:center">wacht op hand</div>
+      </div>
+      <div class="grow">
+        <div class="lbl status">Gespeld / herkend</div>
+        <div class="text-out" id="signText"></div>
+        <div class="braille-out" id="signBraille" style="font-size:1.4rem"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="signSpace">␣ Spatie</button>
+          <button class="btn" id="signBack">⌫ Wis letter</button>
+          <button class="btn" id="signClear">🗑 Leeg</button>
+          <button class="btn" id="signSpeak">🔊 Voorlezen</button>
+          <button class="btn" id="signCopy">📋 Kopiëren</button>
+          <button class="btn" id="signSave">💾 Bewaren</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="field"><label for="signHold">Vasthoudtijd voordat een letter wordt toegevoegd: <span id="signHoldVal">0,8</span> s</label><input type="range" id="signHold" min="300" max="2000" step="100" value="800"></div>
+      <div class="field"><label for="signStrict">Strengheid herkenning: <span id="signStrictVal">50</span></label><input type="range" id="signStrict" min="10" max="90" value="50"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Trainmodus: letters en gebaren aanleren</h2>
+    <p class="status">De app kent nog geen gebaren. Leer ze aan: kies een letter van het handalfabet of typ een eigen gebaar (bijv. “hallo”, “dank je”, “spatie”, “wis”), houd het gebaar voor de camera en druk op “Opnemen”. Neem elk gebaar 2–3 keer op vanuit iets andere hoeken. Speciale labels: <b>spatie</b> voegt een spatie toe, <b>wis</b> wist de laatste letter.</p>
+    <div class="row">
+      <div class="field"><label for="trainLabel">Label</label>
+        <input type="text" id="trainLabel" list="trainList" placeholder="bijv. a, b, hallo…" autocapitalize="none">
+        <datalist id="trainList"></datalist></div>
+      <button class="btn primary" id="trainRec" disabled>⏺ Opnemen (2 s)</button>
+    </div>
+    <div class="status" id="trainStatus" style="margin-top:6px"></div>
+    <div class="chips" id="trainClasses" style="margin-top:10px" aria-label="Aangeleerde gebaren"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="trainExport">⬇ Exporteer gebaren (JSON)</button>
+      <label class="btn" for="trainImport">⬆ Importeer gebaren</label><input type="file" id="trainImport" accept="application/json" class="sr-only">
+      <button class="btn danger" id="trainClear">🗑 Alles wissen</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ALFABET ================= -->
+<section id="tab-alfabet" role="tabpanel" aria-label="Nederlands braille-alfabet">
+  <div class="card">
+    <h2>Nederlands braille-alfabet</h2>
+    <p class="status">Een braillecel bestaat uit 6 punten: links 1-2-3 (van boven naar beneden), rechts 4-5-6. Nederlands braille is “onverkort”: elke letter is één cel. Een hoofdletter krijgt het hoofdletterteken (punten 4-6) ervoor, cijfers het cijferteken (3-4-5-6) gevolgd door de letters a–j.</p>
+    <div id="alphaContent"></div>
+  </div>
+</section>
+
+<!-- ================= GESCHIEDENIS ================= -->
+<section id="tab-geschiedenis" role="tabpanel" aria-label="Bewaarde teksten">
+  <div class="card">
+    <div class="row"><h2 class="grow">Bewaarde teksten</h2><button class="btn danger" id="histClear">🗑 Alles wissen</button></div>
+    <div id="histList"><p class="status">Nog niets bewaard. Gebruik “Bewaren” bij een resultaat.</p></div>
+  </div>
+</section>
+
+<!-- ================= HELP ================= -->
+<section id="tab-help" role="tabpanel" aria-label="Uitleg">
+  <div class="card">
+    <h2>Zo werkt het</h2>
+    <p><b>Camera</b>: start de camera en houd braille recht in beeld. De app zoekt de puntjes, bepaalt het rooster van cellen en vertaalt live naar Nederlands. Blauwe kaders tonen de herkende cellen; groene stippen de gevonden punten. Gebruik “Vastzetten” om een goed beeld te bevriezen.</p>
+    <p><b>Reliëfbraille</b> (gebosseleerd papier, medicijndoosjes) is lastiger dan gedrukte punten. Zorg voor scherp zijlicht, houd de camera recht boven het papier en kies “Reliëf” bij Soort braille. Speel met gevoeligheid en puntgrootte totdat de groene stippen precies op de puntjes vallen.</p>
+    <p><b>Foto</b>: kies of maak een foto; dezelfde herkenning. Met “Testafbeelding” maak je een oefenplaatje.</p>
+    <p><b>Vertaler</b>: typ Nederlands en zie braille (of andersom). De braille-toetsen onder het tekstvak helpen om braille in te voeren zonder speciaal toetsenbord.</p>
+    <p><b>Gebaren</b>: de app volgt je hand met een AI-model (MediaPipe Hands) en herkent handvormen die je zelf hebt aangeleerd: het Nederlandse handalfabet (vingerspelling) en eigen gebaren. Volledige Nederlandse Gebarentaal (NGT) met grammatica en bewegende gebaren kan de app niet vertalen; statische handvormen wel.</p>
+    <p><b>Voorlezen</b> gebruikt de Nederlandse stem van je apparaat. <b>Bewaren</b> zet een resultaat in de geschiedenis (opgeslagen in deze browser).</p>
+    <p><b>Privacy</b>: alles draait in je browser. Beelden verlaten je apparaat niet. Alleen het handmodel wordt eenmalig van internet geladen.</p>
+    <p class="status">Sneltoetsen: <span class="kbd">1</span>–<span class="kbd">7</span> tabblad, <span class="kbd">V</span> voorlezen op het actieve tabblad.</p>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script>
+/* ==== Nederlandse braille: tabel, encoder, decoder, beeldherkenning ==== */
+const BrailleNL = (() => {
+  // Puntnummers -> Unicode. bits: punt1=1, punt2=2, punt3=4, punt4=8, punt5=16, punt6=32
+  const dotsToChar = (dots) => {
+    let m = 0;
+    for (const d of String(dots)) m |= 1 << (parseInt(d, 10) - 1);
+    return String.fromCharCode(0x2800 + m);
+  };
+  const charToMask = (ch) => ch.charCodeAt(0) - 0x2800;
+
+  // Letters (internationaal, ook Nederlands)
+  const LETTERS = {
+    a: '1', b: '12', c: '14', d: '145', e: '15', f: '124', g: '1245', h: '125', i: '24', j: '245',
+    k: '13', l: '123', m: '134', n: '1345', o: '135', p: '1234', q: '12345', r: '1235', s: '234', t: '2345',
+    u: '136', v: '1236', w: '2456', x: '1346', y: '13456', z: '1356',
+  };
+  // Letters met accent (gangbare Nederlandse tabel)
+  const ACCENTS = {
+    'é': '123456', 'è': '2346', 'ê': '126', 'ë': '1246',
+    'à': '12356', 'â': '16', 'ä': '345',
+    'ç': '12346', 'ï': '146', 'î': '12456',
+    'ö': '246', 'ô': '1456', 'ü': '1256', 'û': '156', 'ù': '23456',
+  };
+  const DIGITS = { '1': 'a', '2': 'b', '3': 'c', '4': 'd', '5': 'e', '6': 'f', '7': 'g', '8': 'h', '9': 'i', '0': 'j' };
+  // Leestekens (enkelvoudige cellen)
+  const PUNCT = {
+    ',': '2', ';': '23', ':': '25', '.': '256', '?': '236', '!': '235',
+    "'": '3', '-': '36', '"': '2356', '/': '34', '*': '35',
+  };
+  // Samengestelde tekens
+  const MULTI = { '(': '5-126', ')': '5-345', '@': '4-1', '%': '3456-245-34', '€': '4-15', '&': '5-12346', '+': '5-235', '=': '5-2356' };
+  const CAPITAL = '46';   // hoofdletterteken
+  const NUMBER = '3456';  // cijferteken
+  const LETTERSIGN = '56'; // letterteken (einde cijferreeks)
+
+  // Opbouw lookup-tabellen
+  const enc = {}; // teken -> braille-string
+  for (const [k, v] of Object.entries(LETTERS)) enc[k] = dotsToChar(v);
+  for (const [k, v] of Object.entries(ACCENTS)) enc[k] = dotsToChar(v);
+  for (const [k, v] of Object.entries(PUNCT)) enc[k] = dotsToChar(v);
+  for (const [k, v] of Object.entries(MULTI)) enc[k] = v.split('-').map(dotsToChar).join('');
+  const CAP = dotsToChar(CAPITAL), NUM = dotsToChar(NUMBER), LET = dotsToChar(LETTERSIGN);
+
+  const dec = {}; // braille-char -> teken (letters/accenten/leestekens)
+  for (const [k, v] of Object.entries(LETTERS)) dec[dotsToChar(v)] = k;
+  for (const [k, v] of Object.entries(ACCENTS)) dec[dotsToChar(v)] = k;
+  for (const [k, v] of Object.entries(PUNCT)) dec[dotsToChar(v)] = k;
+  const decMulti = {};
+  for (const [k, v] of Object.entries(MULTI)) decMulti[v.split('-').map(dotsToChar).join('')] = k;
+  const digitByLetter = {}; for (const [d, l] of Object.entries(DIGITS)) digitByLetter[l] = d;
+
+  function textToBraille(text) {
+    let out = '', inNumber = false;
+    const lower = (c) => c.toLowerCase();
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '\n') { out += '\n'; inNumber = false; continue; }
+      if (c === ' ' || c === '\t') { out += '⠀'; inNumber = false; continue; }
+      if (/[0-9]/.test(c)) {
+        if (!inNumber) { out += NUM; inNumber = true; }
+        out += enc[DIGITS[c]];
+        continue;
+      }
+      // na cijfers gevolgd door letter a-j: letterteken om verwarring te vermijden
+      const lc = lower(c);
+      if (inNumber && /[a-j]/.test(lc)) out += LET;
+      inNumber = false;
+      if (c !== lc && enc[lc]) { out += CAP + enc[lc]; continue; }
+      if (enc[lc]) { out += enc[lc]; continue; }
+      if (c === ',' || c === '.') { out += enc[c]; continue; }
+      out += '?'; // onbekend teken
+    }
+    return out;
+  }
+
+  function brailleToText(br) {
+    let out = '', cap = false, num = false;
+    const chars = Array.from(br);
+    for (let i = 0; i < chars.length; i++) {
+      const c = chars[i];
+      if (c === '\n') { out += '\n'; num = false; cap = false; continue; }
+      if (c === '⠀' || c === ' ') { out += ' '; num = false; cap = false; continue; }
+      if (c.charCodeAt(0) < 0x2800 || c.charCodeAt(0) > 0x28ff) { out += c; continue; }
+      // samengestelde tekens (2 of 3 cellen)
+      const pair = c + (chars[i + 1] || ''), trio = pair + (chars[i + 2] || '');
+      if (decMulti[trio]) { out += decMulti[trio]; i += 2; num = false; continue; }
+      if (decMulti[pair]) { out += decMulti[pair]; i += 1; num = false; continue; }
+      if (c === CAP) { cap = true; continue; }
+      if (c === NUM) { num = true; continue; }
+      if (c === LET) { num = false; continue; }
+      let t = dec[c];
+      if (t === undefined) { out += '□'; cap = false; continue; }
+      if (num && digitByLetter[t]) { out += digitByLetter[t]; continue; }
+      if (num && !/[a-z]/.test(t)) { /* leesteken beëindigt cijfer */ num = false; }
+      if (cap) { t = t.toUpperCase(); cap = false; }
+      out += t;
+    }
+    return out;
+  }
+
+  // Referentietabel voor de UI
+  function referenceTable() {
+    const rows = [];
+    for (const [k, v] of Object.entries(LETTERS)) rows.push({ group: 'Letters', sym: k, dots: v, br: dotsToChar(v) });
+    for (const [d, l] of Object.entries(DIGITS)) rows.push({ group: 'Cijfers (na cijferteken ⠼)', sym: d, dots: LETTERS[l], br: NUM + dotsToChar(LETTERS[l]) });
+    for (const [k, v] of Object.entries(ACCENTS)) rows.push({ group: 'Letters met accent', sym: k, dots: v, br: dotsToChar(v) });
+    for (const [k, v] of Object.entries(PUNCT)) rows.push({ group: 'Leestekens', sym: k, dots: v, br: dotsToChar(v) });
+    for (const [k, v] of Object.entries(MULTI)) rows.push({ group: 'Samengestelde tekens', sym: k, dots: v.replace(/-/g, ' + '), br: v.split('-').map(dotsToChar).join('') });
+    rows.push({ group: 'Voortekens', sym: 'Hoofdletter', dots: CAPITAL, br: CAP });
+    rows.push({ group: 'Voortekens', sym: 'Cijferteken', dots: NUMBER, br: NUM });
+    rows.push({ group: 'Voortekens', sym: 'Letterteken', dots: LETTERSIGN, br: LET });
+    return rows;
+  }
+
+  /* ---------------- Beeldherkenning ----------------
+     img: {width, height, data(RGBA Uint8ClampedArray)}
+     opts: {mode:'dark'|'light'|'relief', sens:0..100, dot: geschatte puntdiameter px}
+     returnt {dots:[{x,y}], cells:[{x,y,w,h,mask,ch}], lines:[string], text, braille, pitch, angle}
+  */
+  function recognize(img, opts = {}) {
+    const W = img.width, H = img.height, N = W * H;
+    const mode = opts.mode || 'dark';
+    const sens = opts.sens == null ? 50 : opts.sens;
+    const dotPx = Math.max(3, opts.dot || 8);
+    const src = img.data;
+
+    // grijswaarden
+    const g = new Float32Array(N);
+    for (let i = 0, j = 0; i < N; i++, j += 4) g[i] = 0.299 * src[j] + 0.587 * src[j + 1] + 0.114 * src[j + 2];
+
+    // integraalbeeld voor lokaal gemiddelde
+    const I = new Float64Array((W + 1) * (H + 1));
+    for (let y = 1; y <= H; y++) {
+      let row = 0;
+      for (let x = 1; x <= W; x++) {
+        row += g[(y - 1) * W + (x - 1)];
+        I[y * (W + 1) + x] = I[(y - 1) * (W + 1) + x] + row;
+      }
+    }
+    const r = Math.round(dotPx * 1.5);
+    const boxMean = (x, y) => {
+      const x0 = Math.max(0, x - r), y0 = Math.max(0, y - r), x1 = Math.min(W, x + r + 1), y1 = Math.min(H, y + r + 1);
+      const s = I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0];
+      return s / ((x1 - x0) * (y1 - y0));
+    };
+    // drempel: hogere gevoeligheid = lagere drempel
+    const thr = mode === 'relief' ? (60 - sens * 0.5) : (70 - sens * 0.6);
+    const mask = new Uint8Array(N);
+    if (mode !== 'relief') {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = g[y * W + x] - boxMean(x, y);
+        mask[y * W + x] = (mode === 'dark' ? d < -thr : d > thr) ? 1 : 0;
+      }
+    } else {
+      // reliëf: lokale contrast-energie |d|, gladgestreken over ~1 puntdiameter zodat licht- en schaduwhelft samen één piek vormen
+      const e = new Float32Array(N);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) e[y * W + x] = Math.abs(g[y * W + x] - boxMean(x, y));
+      const E = new Float64Array((W + 1) * (H + 1));
+      for (let y = 1; y <= H; y++) { let row = 0; for (let x = 1; x <= W; x++) { row += e[(y - 1) * W + (x - 1)]; E[y * (W + 1) + x] = E[(y - 1) * (W + 1) + x] + row; } }
+      const r2 = Math.max(1, Math.round(dotPx * 0.45));
+      const sm = new Float32Array(N);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const x0 = Math.max(0, x - r2), y0 = Math.max(0, y - r2), x1 = Math.min(W, x + r2 + 1), y1 = Math.min(H, y + r2 + 1);
+        sm[y * W + x] = (E[y1 * (W + 1) + x1] - E[y0 * (W + 1) + x1] - E[y1 * (W + 1) + x0] + E[y0 * (W + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+      }
+      // lokale maxima (non-maximum suppression) binnen ~0.6 puntdiameter
+      const wr = Math.max(1, Math.round(dotPx * 0.6));
+      const t2 = thr * 0.5;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = sm[y * W + x];
+        if (v <= t2) continue;
+        let isMax = true;
+        for (let dy = -wr; dy <= wr && isMax; dy++) for (let dx = -wr; dx <= wr; dx++) {
+          const yy = y + dy, xx = x + dx;
+          if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
+          if (sm[yy * W + xx] > v) { isMax = false; break; }
+        }
+        if (isMax) mask[y * W + x] = 1;
+      }
+    }
+    // verbonden componenten
+    const minA = mode === 'relief' ? 1 : Math.max(3, (dotPx * dotPx) * 0.15), maxA = (dotPx * dotPx) * 4.5;
+    const seen = new Uint8Array(N);
+    const stack = new Int32Array(N);
+    const dots = [];
+    for (let s = 0; s < N; s++) {
+      if (!mask[s] || seen[s]) continue;
+      let sp = 0; stack[sp++] = s; seen[s] = 1;
+      let sx = 0, sy = 0, cnt = 0, minx = W, maxx = 0, miny = H, maxy = 0;
+      while (sp) {
+        const p = stack[--sp]; const px = p % W, py = (p - px) / W;
+        sx += px; sy += py; cnt++;
+        if (px < minx) minx = px; if (px > maxx) maxx = px; if (py < miny) miny = py; if (py > maxy) maxy = py;
+        const nb = [p - 1, p + 1, p - W, p + W];
+        for (const q of nb) {
+          if (q < 0 || q >= N) continue;
+          if ((q === p - 1 && px === 0) || (q === p + 1 && px === W - 1)) continue;
+          if (mask[q] && !seen[q]) { seen[q] = 1; stack[sp++] = q; }
+        }
+      }
+      const bw = maxx - minx + 1, bh = maxy - miny + 1;
+      const ar = bw / bh;
+      if (cnt >= minA && cnt <= maxA && (mode === 'relief' || (ar > 0.4 && ar < 2.5))) dots.push({ x: sx / cnt, y: sy / cnt, n: cnt });
+    }
+    // reliëf: licht- en schaduwvlek van dezelfde punt samenvoegen (centroids dichter dan ~1 puntdiameter)
+    if (mode === 'relief' && dots.length > 1) {
+      dots.sort((a, b) => a.y - b.y || a.x - b.x);
+      const merged = [];
+      const used = new Uint8Array(dots.length);
+      const R = dotPx * 0.9;
+      for (let i = 0; i < dots.length; i++) {
+        if (used[i]) continue;
+        let sx = dots[i].x * dots[i].n, sy = dots[i].y * dots[i].n, n = dots[i].n; used[i] = 1;
+        for (let j = i + 1; j < dots.length; j++) {
+          if (used[j]) continue;
+          if (dots[j].y - dots[i].y > R) break;
+          const dx = dots[j].x - dots[i].x, dy = dots[j].y - dots[i].y;
+          if (dx * dx + dy * dy <= R * R) { sx += dots[j].x * dots[j].n; sy += dots[j].y * dots[j].n; n += dots[j].n; used[j] = 1; }
+        }
+        merged.push({ x: sx / n, y: sy / n, n });
+      }
+      dots.length = 0; dots.push(...merged);
+    }
+    const empty = { dots, cells: [], lines: [], text: '', braille: '', pitch: 0, angle: 0 };
+    if (dots.length < 2) return empty;
+
+    // dichtstbijzijnde-buur afstanden -> puntafstand d (binnen cel)
+    const nn = [];
+    const vecs = [];
+    for (let i = 0; i < dots.length; i++) {
+      let best = Infinity, bj = -1;
+      for (let j = 0; j < dots.length; j++) {
+        if (i === j) continue;
+        const dx = dots[j].x - dots[i].x, dy = dots[j].y - dots[i].y, dd = dx * dx + dy * dy;
+        if (dd < best) { best = dd; bj = j; }
+      }
+      const dist = Math.sqrt(best);
+      nn.push(dist); vecs.push({ dist, dx: dots[bj].x - dots[i].x, dy: dots[bj].y - dots[i].y });
+    }
+    // histogram-piek (bin 1px, licht gladgestreken), eerste duidelijke piek >= dotPx
+    const maxD = Math.min(400, Math.ceil(Math.max(...nn)) + 1);
+    const hist = new Float32Array(maxD + 2);
+    for (const v of nn) { const b = Math.round(v); if (b <= maxD) hist[b]++; }
+    let pitch = 0, pv = 0;
+    for (let b = Math.max(2, Math.round(dotPx * 0.8)); b <= maxD; b++) {
+      const v = (hist[b - 1] || 0) + hist[b] + (hist[b + 1] || 0);
+      if (v > pv) { pv = v; pitch = b; }
+    }
+    if (!pitch) return empty;
+    // verfijn: gemiddelde van afstanden in [0.8,1.2]*pitch
+    let sum = 0, c = 0; for (const v of nn) if (v > pitch * 0.8 && v < pitch * 1.2) { sum += v; c++; }
+    if (c) pitch = sum / c;
+
+    // rotatiehoek uit buurvectoren dichtbij d
+    const angs = [];
+    for (const v of vecs) {
+      if (v.dist < pitch * 0.8 || v.dist > pitch * 1.2) continue;
+      let a = Math.atan2(v.dy, v.dx);            // -pi..pi
+      a = ((a % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2); // 0..pi/2
+      if (a > Math.PI / 4) a -= Math.PI / 2;     // -pi/4..pi/4
+      angs.push(a);
+    }
+    angs.sort((a, b) => a - b);
+    const angle = angs.length ? angs[Math.floor(angs.length / 2)] : 0;
+    const ca = Math.cos(-angle), sa = Math.sin(-angle);
+    const pts = dots.map(p => ({ x: p.x * ca - p.y * sa, y: p.x * sa + p.y * ca, ox: p.x, oy: p.y }));
+
+    // 1D-clustering van x en y
+    const cluster1d = (vals, tol) => {
+      const idx = vals.map((v, i) => i).sort((a, b) => vals[a] - vals[b]);
+      const groups = []; let cur = [];
+      for (const i of idx) {
+        if (cur.length && vals[i] - vals[cur[cur.length - 1]] > tol) { groups.push(cur); cur = []; }
+        cur.push(i);
+      }
+      if (cur.length) groups.push(cur);
+      return groups.map(gr => ({ pos: gr.reduce((s, i) => s + vals[i], 0) / gr.length, members: gr }));
+    };
+    const cols = cluster1d(pts.map(p => p.x), pitch * 0.4);
+    const rows = cluster1d(pts.map(p => p.y), pitch * 0.4);
+
+    // Kolommen groeperen in cellen: paar kolommen op afstand ~d = één cel; anders enkele kolom.
+    // Voor een enkele kolom bepalen we links/rechts via afstand tot buurkolommen (cel-pitch ~2.4d, tussenruimte ~1.4d)
+    const cellCols = []; // {left:x, cols:[colIdx...]}
+    {
+      let i = 0;
+      const colPos = cols.map(cc => cc.pos);
+      const tol = pitch * 0.35;
+      while (i < colPos.length) {
+        if (i + 1 < colPos.length && Math.abs(colPos[i + 1] - colPos[i] - pitch) < tol) {
+          cellCols.push({ left: colPos[i], cols: [i, i + 1] }); i += 2;
+        } else {
+          // enkele kolom: is dit een linker- of rechterkolom?
+          const prevLeft = cellCols.length ? cellCols[cellCols.length - 1].left : null;
+          let isRight = false;
+          if (prevLeft != null) {
+            const k = (colPos[i] - prevLeft) / (pitch * 2.4); // aantal cel-pitches
+            const frac = k - Math.floor(k);
+            // rechterkolom ligt op +d = +0.417 cel-pitch
+            isRight = Math.abs(frac - 0.417) < 0.2;
+          } else if (i + 1 < colPos.length) {
+            // eerste kolom: kijk naar afstand tot volgende cel
+            const gap = colPos[i + 1] - colPos[i];
+            const k = gap / (pitch * 2.4), frac = k - Math.floor(k);
+            // links -> volgende links op geheel veelvoud; rechts -> volgende links op 0.58
+            isRight = Math.abs(frac - 0.583) < 0.2;
+          }
+          cellCols.push({ left: isRight ? colPos[i] - pitch : colPos[i], cols: isRight ? [-1, i] : [i, -1] }); i += 1;
+        }
+      }
+    }
+    // Rijen groeperen in regels van 3: rij-afstand d, regelafstand ~4d (gat 2d)
+    const lineRows = []; // {top:y, rows:[r1,r2,r3]}
+    {
+      const rowPos = rows.map(rr => rr.pos);
+      const tol = pitch * 0.35;
+      let i = 0;
+      while (i < rowPos.length) {
+        // zoek aaneengesloten rijen met afstand d (max 3)
+        const grp = [i];
+        while (grp.length < 3 && i + 1 < rowPos.length && Math.abs(rowPos[i + 1] - rowPos[i] - pitch) < tol) { i++; grp.push(i); }
+        i++;
+        // positie binnen de regel bepalen (0,1,2) — bij minder dan 3 rijen: kijk naar vorige regel
+        let offset = 0;
+        if (grp.length < 3) {
+          const prev = lineRows.length ? lineRows[lineRows.length - 1] : null;
+          if (prev) {
+            const k = (rowPos[grp[0]] - prev.top) / pitch; // in puntafstanden vanaf vorige top
+            const m = ((k % 4) + 4) % 4; // 0,1,2 = rij-index binnen regel (regelpitch 4d)
+            const cand = [0, 1, 2].map(o => Math.min(Math.abs(m - o), 4 - Math.abs(m - o)));
+            offset = cand.indexOf(Math.min(...cand));
+            if (offset + grp.length > 3) offset = 3 - grp.length;
+          } else {
+            // eerste regel: kijk naar de volgende rij; als het gat ~2d of ~3d is, staan we onderaan
+            const nxt = rowPos[i];
+            if (nxt != null) {
+              const gapAfter = (nxt - rowPos[grp[grp.length - 1]]) / pitch;
+              if (Math.abs(gapAfter - 2) < 0.4) offset = 3 - grp.length;       // eindigt op rij 3
+              else if (Math.abs(gapAfter - 3) < 0.4) offset = 2 - grp.length;  // eindigt op rij 2
+              else if (Math.abs(gapAfter - 4) < 0.4) offset = 1 - grp.length;
+              if (offset < 0) offset = 0;
+            }
+          }
+        }
+        const rr = [-1, -1, -1];
+        grp.forEach((ri, k) => { rr[offset + k] = ri; });
+        lineRows.push({ top: rowPos[grp[0]] - offset * pitch, rows: rr });
+      }
+    }
+    // punt -> (kolomindex, rijindex)
+    const colOf = new Int32Array(pts.length).fill(-1), rowOf = new Int32Array(pts.length).fill(-1);
+    cols.forEach((cc, ci) => cc.members.forEach(m => colOf[m] = ci));
+    rows.forEach((rr, ri) => rr.members.forEach(m => rowOf[m] = ri));
+    const colToCell = new Map(); // colIdx -> {cellIdx, side}
+    cellCols.forEach((cc, k) => { if (cc.cols[0] >= 0) colToCell.set(cc.cols[0], { k, side: 0 }); if (cc.cols[1] >= 0) colToCell.set(cc.cols[1], { k, side: 1 }); });
+    const rowToLine = new Map();
+    lineRows.forEach((lr, k) => lr.rows.forEach((ri, j) => { if (ri >= 0) rowToLine.set(ri, { k, j }); }));
+
+    const cellMasks = new Map(); // "line:cell" -> mask
+    pts.forEach((p, i) => {
+      const cc = colToCell.get(colOf[i]), lr = rowToLine.get(rowOf[i]);
+      if (!cc || !lr) return;
+      const key = lr.k + ':' + cc.k;
+      const bit = cc.side === 0 ? (1 << lr.j) : (1 << (lr.j + 3));
+      cellMasks.set(key, (cellMasks.get(key) || 0) | bit);
+    });
+
+    // regels opbouwen met spaties voor ontbrekende cellen
+    const cellPitch = pitch * 2.4;
+    const lines = [];
+    const cells = [];
+    for (let l = 0; l < lineRows.length; l++) {
+      let s = '';
+      let prevIdx = null;
+      for (let k = 0; k < cellCols.length; k++) {
+        const m = cellMasks.get(l + ':' + k);
+        if (m == null) continue;
+        const idx = Math.round(cellCols[k].left / cellPitch);
+        if (prevIdx != null) {
+          const gap = idx - prevIdx - 1;
+          if (gap >= 1) s += '⠀'.repeat(Math.min(gap, 3));
+        }
+        prevIdx = idx;
+        const ch = String.fromCharCode(0x2800 + m);
+        s += ch;
+        // celkader terug naar beeldcoördinaten
+        const cx = cellCols[k].left + pitch / 2, cy = lineRows[l].top + pitch;
+        const cb = Math.cos(angle), sb = Math.sin(angle);
+        cells.push({ x: cx * cb - cy * sb, y: cx * sb + cy * cb, w: pitch * 2, h: pitch * 3, ch, angle });
+      }
+      lines.push(s);
+    }
+    const braille = lines.join('\n');
+    const text = brailleToText(braille);
+    return { dots, cells, lines, text, braille, pitch, angle };
+  }
+
+  return { textToBraille, brailleToText, referenceTable, recognize, dotsToChar, charToMask, CAP, NUM, LET };
+})();
+
+</script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const B = BrailleNL;
+
+  /* ---------- helpers ---------- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* opslag niet beschikbaar */ } },
+  };
+  let toastT;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+  async function copyText(s) {
+    if (!s) return toast('Niets om te kopiëren');
+    try { await navigator.clipboard.writeText(s); toast('Gekopieerd'); }
+    catch { const ta = document.createElement('textarea'); ta.value = s; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Gekopieerd'); }
+  }
+
+  /* ---------- spraak ---------- */
+  let nlVoice = null;
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) { $('voiceStatus').textContent = 'Geen spraak'; return; }
+    const vs = speechSynthesis.getVoices();
+    nlVoice = vs.find(v => /^nl[-_]NL/i.test(v.lang)) || vs.find(v => /^nl/i.test(v.lang)) || null;
+    $('voiceStatus').textContent = nlVoice ? '🔊 ' + nlVoice.name.split(' ')[0] : (vs.length ? '🔊 geen NL-stem' : '');
+  }
+  if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  function speak(text) {
+    if (!('speechSynthesis' in window)) return toast('Voorlezen wordt niet ondersteund');
+    if (!text || !text.trim()) return toast('Niets om voor te lezen');
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'nl-NL'; if (nlVoice) u.voice = nlVoice; u.rate = 0.95;
+    speechSynthesis.speak(u);
+  }
+
+  /* ---------- geschiedenis ---------- */
+  let history = store.get('braille.history', []);
+  function saveHistory(type, braille, text) {
+    if (!text && !braille) return toast('Niets om te bewaren');
+    history.unshift({ t: Date.now(), type, braille, text });
+    history = history.slice(0, 200);
+    store.set('braille.history', history);
+    renderHistory(); toast('Bewaard in geschiedenis');
+  }
+  function renderHistory() {
+    const el = $('histList');
+    if (!history.length) { el.innerHTML = '<p class="status">Nog niets bewaard. Gebruik “Bewaren” bij een resultaat.</p>'; return; }
+    el.innerHTML = '';
+    history.forEach((h, i) => {
+      const d = document.createElement('div'); d.className = 'hist-item';
+      const time = new Date(h.t).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' });
+      d.innerHTML = `<div class="row"><time>${time}</time><span class="pill">${h.type}</span></div>
+        <div class="text-out" style="font-size:1.2rem"></div><div class="braille-out" style="font-size:1.3rem"></div>
+        <div class="row" style="margin-top:6px"><button class="btn" data-a="speak">🔊</button><button class="btn" data-a="copy">📋 Tekst</button><button class="btn" data-a="copybr">📋 Braille</button><button class="btn danger" data-a="del">🗑</button></div>`;
+      d.querySelector('.text-out').textContent = h.text || '';
+      d.querySelector('.braille-out').textContent = h.braille || '';
+      d.querySelectorAll('button').forEach(b => b.onclick = () => {
+        const a = b.dataset.a;
+        if (a === 'speak') speak(h.text); else if (a === 'copy') copyText(h.text); else if (a === 'copybr') copyText(h.braille);
+        else { history.splice(i, 1); store.set('braille.history', history); renderHistory(); }
+      });
+      el.appendChild(d);
+    });
+  }
+  $('histClear').onclick = () => { if (confirm('Alle bewaarde teksten wissen?')) { history = []; store.set('braille.history', history); renderHistory(); } };
+  renderHistory();
+
+  /* ---------- tabs ---------- */
+  const tabs = [...document.querySelectorAll('nav [role="tab"]')];
+  let activeTab = 'camera';
+  function showTab(name) {
+    activeTab = name;
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    document.querySelectorAll('section[role="tabpanel"]').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+    if (name !== 'camera') stopCam(); else if (camWanted) startCam();
+    if (name !== 'gebaren') stopSign();
+    if (name === 'gebaren') $('signHint').textContent = signReady ? 'Houd één hand duidelijk in beeld.' : 'Start de camera; het handmodel wordt eenmalig geladen (internet nodig, ±10 MB).';
+    store.set('braille.tab', name);
+  }
+  tabs.forEach(t => t.onclick = () => showTab(t.dataset.tab));
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea, select')) return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= tabs.length) showTab(tabs[n - 1].dataset.tab);
+    if (e.key.toLowerCase() === 'v') {
+      const map = { camera: 'camText', foto: 'fotoText', vertaler: null, gebaren: 'signText' };
+      if (activeTab === 'vertaler') speakTranslator(); else if (map[activeTab]) speak($(map[activeTab]).textContent);
+    }
+  });
+
+  /* ---------- instellingen ---------- */
+  const opts = Object.assign({ mode: 'dark', sens: 50, dot: 8 }, store.get('braille.opts', {}));
+  $('optMode').value = opts.mode; $('optSens').value = opts.sens; $('optDot').value = opts.dot;
+  const syncOpts = () => {
+    opts.mode = $('optMode').value; opts.sens = +$('optSens').value; opts.dot = +$('optDot').value;
+    $('optSensVal').textContent = opts.sens; $('optDotVal').textContent = opts.dot;
+    store.set('braille.opts', opts);
+    if (fotoLoaded) processFoto();
+  };
+  ['optMode', 'optSens', 'optDot'].forEach(id => $(id).addEventListener('input', syncOpts));
+  syncOpts();
+
+  /* ---------- beeldverwerking + overlay ---------- */
+  const work = document.createElement('canvas');
+  const wctx = work.getContext('2d', { willReadFrequently: true });
+  const MAXW = 720;
+  function analyze(source, sw, sh) {
+    const scale = Math.min(1, MAXW / sw);
+    work.width = Math.round(sw * scale); work.height = Math.round(sh * scale);
+    wctx.drawImage(source, 0, 0, work.width, work.height);
+    const img = wctx.getImageData(0, 0, work.width, work.height);
+    const res = B.recognize(img, { mode: opts.mode, sens: opts.sens, dot: Math.max(3, Math.round(opts.dot * scale)) });
+    res.scale = scale; res.w = work.width; res.h = work.height;
+    return res;
+  }
+  function drawOverlay(canvas, res, viewW, viewH, srcW, srcH) {
+    canvas.width = viewW; canvas.height = viewH;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, viewW, viewH);
+    if (!res) return;
+    // object-fit: contain -> bereken offset/schaal
+    const s = Math.min(viewW / srcW, viewH / srcH);
+    const ox = (viewW - srcW * s) / 2, oy = (viewH - srcH * s) / 2;
+    const k = s / res.scale; // werk-canvas -> weergave
+    ctx.save(); ctx.translate(ox, oy);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(80,140,255,.95)';
+    for (const c of res.cells) {
+      ctx.save(); ctx.translate(c.x * k, c.y * k); ctx.rotate(c.angle);
+      ctx.strokeRect(-c.w / 2 * k, -c.h / 2 * k, c.w * k, c.h * k);
+      ctx.restore();
+    }
+    ctx.fillStyle = 'rgba(40,220,120,.9)';
+    const rr = Math.max(2, res.pitch ? res.pitch * k * 0.15 : 3);
+    for (const d of res.dots) { ctx.beginPath(); ctx.arc(d.x * k, d.y * k, rr, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  function setResult(prefix, res, statusEl) {
+    $(prefix + 'Braille').textContent = res ? res.braille : '';
+    $(prefix + 'Text').textContent = res ? res.text : '';
+    if (statusEl) {
+      if (!res || !res.dots.length) { statusEl.textContent = 'Geen punten gevonden'; statusEl.className = 'status warn'; }
+      else if (res.cells.length < 2 || res.dots.length < 4 || res.dots.length / res.cells.length < 1.4) { $(prefix + 'Braille').textContent = ''; $(prefix + 'Text').textContent = ''; statusEl.textContent = 'Te weinig punten voor braille — kom dichterbij of pas de instellingen aan'; statusEl.className = 'status warn'; }
+      else if (!res.cells.length) { statusEl.textContent = `${res.dots.length} punten, geen rooster herkend — pas puntgrootte/gevoeligheid aan`; statusEl.className = 'status warn'; }
+      else { statusEl.textContent = `${res.dots.length} punten · ${res.cells.length} cellen · ${res.lines.length} regel(s)`; statusEl.className = 'status ok'; }
+    }
+  }
+
+  /* ---------- camera (braille) ---------- */
+  const camVideo = $('camVideo'), camOverlay = $('camOverlay');
+  var camStream = null, camWanted = false, camTimer = null, camFacing = store.get('braille.facing', 'environment'), camFrozen = false, camRes = null;
+  async function getStream(facing, videoEl) {
+    const tries = [
+      { video: { facingMode: { exact: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false },
+      { video: { facingMode: facing, width: { ideal: 1280 } }, audio: false },
+      { video: true, audio: false },
+    ];
+    let err;
+    for (const c of tries) { try { const s = await navigator.mediaDevices.getUserMedia(c); videoEl.srcObject = s; await videoEl.play().catch(() => {}); return s; } catch (e) { err = e; } }
+    throw err;
+  }
+  async function startCam() {
+    if (camStream) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('camHint').textContent = 'Deze browser ondersteunt geen camera. Gebruik het tabblad Foto.'; return; }
+    try {
+      camStream = await getStream(camFacing, camVideo);
+      camWanted = true; camFrozen = false;
+      $('camStart').textContent = '⏹ Camera stoppen'; $('camFreeze').disabled = false; $('camFreeze').textContent = '⏸ Vastzetten';
+      $('camHint').textContent = 'Houd de braille recht en scherp in beeld. Groene stippen = gevonden punten, blauwe kaders = cellen.';
+      camTimer = setInterval(camTick, 350);
+    } catch (e) {
+      $('camHint').textContent = 'Camera niet beschikbaar: ' + (e && e.message ? e.message : e) + '. Geef toestemming of gebruik het tabblad Foto.';
+    }
+  }
+  function stopCam(keepWanted) {
+    if (camTimer) { clearInterval(camTimer); camTimer = null; }
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+    camVideo.srcObject = null;
+    if (!keepWanted) { /* laat camWanted staan zodat terugkeren naar tab de camera herstart */ }
+    $('camStart').textContent = '▶ Camera starten'; $('camFreeze').disabled = true;
+  }
+  var busy = false;
+  function camTick() {
+    if (!camStream || camFrozen || busy || !$('camLive').checked) return;
+    if (camVideo.readyState < 2 || !camVideo.videoWidth) return;
+    busy = true;
+    try {
+      camRes = analyze(camVideo, camVideo.videoWidth, camVideo.videoHeight);
+      const r = camOverlay.getBoundingClientRect();
+      drawOverlay(camOverlay, camRes, Math.round(r.width), Math.round(r.height), camVideo.videoWidth, camVideo.videoHeight);
+      setResult('cam', camRes, $('camStatus'));
+    } catch (e) { console.error(e); }
+    busy = false;
+  }
+  $('camStart').onclick = () => { if (camStream) { camWanted = false; stopCam(); } else startCam(); };
+  $('camSwitch').onclick = async () => { camFacing = camFacing === 'environment' ? 'user' : 'environment'; store.set('braille.facing', camFacing); if (camStream) { stopCam(); await startCam(); } };
+  $('camFreeze').onclick = () => { camFrozen = !camFrozen; $('camFreeze').textContent = camFrozen ? '▶ Verder lezen' : '⏸ Vastzetten'; if (camFrozen) toast('Beeld vastgezet'); };
+  $('camSpeak').onclick = () => speak($('camText').textContent);
+  $('camCopy').onclick = () => copyText($('camText').textContent);
+  $('camSave').onclick = () => saveHistory('camera', $('camBraille').textContent, $('camText').textContent);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { stopCam(); stopSign(); } else if (activeTab === 'camera' && camWanted) startCam(); });
+
+  /* ---------- foto ---------- */
+  const fotoImg = $('fotoImg'), fotoOverlay = $('fotoOverlay');
+  var fotoLoaded = false;
+  function processFoto() {
+    if (!fotoLoaded || !fotoImg.naturalWidth) return;
+    const res = analyze(fotoImg, fotoImg.naturalWidth, fotoImg.naturalHeight);
+    const r = fotoOverlay.getBoundingClientRect();
+    drawOverlay(fotoOverlay, res, Math.round(r.width), Math.round(r.height), fotoImg.naturalWidth, fotoImg.naturalHeight);
+    setResult('foto', res, $('fotoStatus'));
+    $('fotoHint').textContent = res.cells.length ? '' : 'Geen braille herkend. Pas de instellingen aan op het tabblad Camera of probeer een scherpere foto.';
+  }
+  fotoImg.onload = () => { fotoLoaded = true; processFoto(); };
+  $('fotoFile').onchange = (e) => { const f = e.target.files[0]; if (!f) return; fotoImg.src = URL.createObjectURL(f); $('fotoHint').textContent = 'Bezig…'; };
+  $('fotoRerun').onclick = processFoto;
+  $('fotoDemo').onclick = () => {
+    // synthetische testafbeelding met echte braille-verhoudingen (punt 2,5 mm, cel 6 mm, regel 10 mm)
+    const text = 'Hallo wereld!\nBraille lezen\nmet Claude 2026';
+    const lines = B.textToBraille(text).split('\n');
+    const d = 14, cellP = d * 2.4, lineP = d * 4, m = d * 3;
+    const cw = Math.round(Math.max(...lines.map(l => l.length)) * cellP + 2 * m), ch = Math.round(lines.length * lineP + 2 * m);
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const x = c.getContext('2d'); x.fillStyle = '#f2efe6'; x.fillRect(0, 0, cw, ch); x.fillStyle = '#222';
+    lines.forEach((l, li) => Array.from(l).forEach((chr, ci) => {
+      const mask = chr.charCodeAt(0) - 0x2800;
+      for (let b = 0; b < 6; b++) if (mask & (1 << b)) {
+        const col = b < 3 ? 0 : 1, row = b % 3;
+        x.beginPath(); x.arc(m + ci * cellP + col * d, m + li * lineP + row * d, d * 0.3, 0, Math.PI * 2); x.fill();
+      }
+    }));
+    $('optMode').value = 'dark'; $('optDot').value = 8; syncOpts();
+    fotoImg.src = c.toDataURL('image/png');
+    $('fotoHint').textContent = 'Testafbeelding: "' + text.replace(/\n/g, ' / ') + '"';
+  };
+  $('fotoSpeak').onclick = () => speak($('fotoText').textContent);
+  $('fotoCopy').onclick = () => copyText($('fotoText').textContent);
+  $('fotoSave').onclick = () => saveHistory('foto', $('fotoBraille').textContent, $('fotoText').textContent);
+  window.addEventListener('resize', () => { if (fotoLoaded) processFoto(); });
+
+  /* ---------- vertaler ---------- */
+  const dirSel = $('dir'), srcText = $('srcText');
+  function translate() {
+    const s = srcText.value;
+    if (dirSel.value === 't2b') {
+      const br = B.textToBraille(s);
+      $('outBraille').textContent = br; $('outText').textContent = '';
+      $('outLabel').textContent = 'Braille'; $('srcLabel').textContent = 'Nederlandse tekst';
+      $('trStatus').textContent = s ? `${Array.from(br.replace(/\n/g, '')).length} cellen` : '';
+    } else {
+      const t = B.brailleToText(s);
+      $('outText').textContent = t; $('outBraille').textContent = '';
+      $('outLabel').textContent = 'Nederlands'; $('srcLabel').textContent = 'Braille (Unicode-tekens)';
+      $('trStatus').textContent = t.includes('□') ? '□ = onbekende cel' : '';
+    }
+    $('brailleKeys').style.display = dirSel.value === 'b2t' ? '' : 'none';
+  }
+  srcText.addEventListener('input', translate);
+  dirSel.addEventListener('change', translate);
+  $('dirSwap').onclick = () => {
+    const out = dirSel.value === 't2b' ? $('outBraille').textContent : $('outText').textContent;
+    dirSel.value = dirSel.value === 't2b' ? 'b2t' : 't2b'; srcText.value = out; translate();
+  };
+  function speakTranslator() { speak(dirSel.value === 't2b' ? srcText.value : $('outText').textContent); }
+  $('trSpeak').onclick = speakTranslator;
+  $('trCopy').onclick = () => copyText(dirSel.value === 't2b' ? $('outBraille').textContent : $('outText').textContent);
+  $('trSave').onclick = () => saveHistory('vertaler', dirSel.value === 't2b' ? $('outBraille').textContent : srcText.value, dirSel.value === 't2b' ? srcText.value : $('outText').textContent);
+  // braille-toetsen: 6 puntknoppen + invoegen
+  {
+    const keys = $('brailleKeys');
+    let cur = 0;
+    const btns = [];
+    const refresh = () => { btns.forEach((b, i) => b.classList.toggle('primary', !!(cur & (1 << i)))); prev.textContent = String.fromCharCode(0x2800 + cur); };
+    for (let i = 0; i < 6; i++) {
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'punt ' + (i + 1); b.type = 'button';
+      b.onclick = () => { cur ^= (1 << i); refresh(); }; btns.push(b); keys.appendChild(b);
+    }
+    const prev = document.createElement('span'); prev.className = 'braille-out'; prev.style.fontSize = '1.8rem'; keys.appendChild(prev);
+    const ins = (s) => { const st = srcText.selectionStart, en = srcText.selectionEnd; srcText.value = srcText.value.slice(0, st) + s + srcText.value.slice(en); srcText.selectionStart = srcText.selectionEnd = st + s.length; translate(); };
+    const add = document.createElement('button'); add.className = 'btn'; add.textContent = '⏎ Cel invoegen'; add.type = 'button';
+    add.onclick = () => { ins(String.fromCharCode(0x2800 + cur)); cur = 0; refresh(); };
+    const sp = document.createElement('button'); sp.className = 'btn'; sp.textContent = '␣ Spatie'; sp.type = 'button'; sp.onclick = () => ins('⠀');
+    const bs = document.createElement('button'); bs.className = 'btn'; bs.textContent = '⌫'; bs.type = 'button';
+    bs.onclick = () => { const chars = Array.from(srcText.value); chars.pop(); srcText.value = chars.join(''); translate(); };
+    keys.append(add, sp, bs);
+    refresh();
+  }
+  translate();
+
+  /* ---------- alfabet ---------- */
+  function cellSvg(dots) {
+    const on = new Set(String(dots).replace(/[^1-6]/g, '').split(''));
+    const pos = { 1: [6, 6], 2: [6, 16.5], 3: [6, 27], 4: [16, 6], 5: [16, 16.5], 6: [16, 27] };
+    let s = '<svg class="cellsvg" viewBox="0 0 22 33" aria-hidden="true">';
+    for (const k of Object.keys(pos)) s += `<circle cx="${pos[k][0]}" cy="${pos[k][1]}" r="4" class="${on.has(k) ? 'on' : ''}"></circle>`;
+    return s + '</svg>';
+  }
+  {
+    const rows = B.referenceTable();
+    const groups = [...new Set(rows.map(r => r.group))];
+    const el = $('alphaContent');
+    for (const gname of groups) {
+      const h = document.createElement('h3'); h.textContent = gname; h.style.fontSize = '1rem'; el.appendChild(h);
+      const grid = document.createElement('div'); grid.className = 'alpha-grid';
+      for (const r of rows.filter(x => x.group === gname)) {
+        const it = document.createElement('div'); it.className = 'alpha-item';
+        const multi = r.dots.includes('+') || r.br.length > 1;
+        it.innerHTML = `${multi ? '' : cellSvg(r.dots)}<div><div class="sym">${r.sym}</div><span class="br">${r.br}</span><br><small>${multi ? r.dots : 'punten ' + r.dots.split('').join('-')}</small></div>`;
+        it.title = `${r.sym}: ${r.br}`;
+        it.tabIndex = 0; it.setAttribute('role', 'button'); it.setAttribute('aria-label', `${r.sym}, braille ${r.dots}, klik om voor te lezen`);
+        it.onclick = () => speak(r.sym.length === 1 ? r.sym : r.sym); it.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); it.click(); } };
+        grid.appendChild(it);
+      }
+      el.appendChild(grid);
+    }
+  }
+
+  /* ================= GEBAREN ================= */
+  const signVideo = $('signVideo'), signOverlay = $('signOverlay');
+  var signStream = null, signReady = false, hands = null, signLoop = null, signFacing = store.get('sign.facing', 'user');
+  var classes = store.get('sign.classes', {}); // label -> [feature[]]
+  var lastFeat = null;
+  var signState = { label: null, since: 0, committed: null, buffer: '' };
+
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = () => rej(new Error('kan ' + src + ' niet laden')); document.head.appendChild(s); }); }
+  async function ensureHands() {
+    if (hands) return hands;
+    $('signStatus').textContent = 'Handmodel laden…';
+    const bases = ['https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240', 'https://cdn.jsdelivr.net/npm/@mediapipe/hands', 'https://unpkg.com/@mediapipe/hands@0.4.1675469240', 'https://unpkg.com/@mediapipe/hands'];
+    let base = null, lastErr = null;
+    for (const b of bases) { try { await loadScript(b + '/hands.js'); base = b; break; } catch (e) { lastErr = e; } }
+    if (!base) throw lastErr || new Error('handmodel niet bereikbaar');
+    hands = new Hands({ locateFile: (f) => `${base}/${f}` });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5, selfieMode: false });
+    hands.onResults(onHands);
+    await hands.initialize();
+    signReady = true; $('signStatus').textContent = 'Model geladen'; $('trainRec').disabled = false;
+    return hands;
+  }
+  async function startSign() {
+    if (signStream) return;
+    try {
+      await ensureHands();
+      signStream = await getStream(signFacing, signVideo);
+      $('signStart').textContent = '⏹ Camera stoppen'; $('signHint').textContent = 'Houd één hand duidelijk in beeld.';
+      const loop = async () => { if (!signStream) return; if (signVideo.readyState >= 2 && signVideo.videoWidth) { try { await hands.send({ image: signVideo }); } catch (e) { console.error(e); } } signLoop = requestAnimationFrame(loop); };
+      loop();
+    } catch (e) {
+      $('signStatus').textContent = 'Fout: ' + (e && e.message ? e.message : e); $('signStatus').className = 'status bad';
+      $('signHint').textContent = 'Lukt het laden niet? Controleer de internetverbinding en probeer opnieuw.';
+    }
+  }
+  function stopSign() {
+    if (signLoop) { cancelAnimationFrame(signLoop); signLoop = null; }
+    if (signStream) { signStream.getTracks().forEach(t => t.stop()); signStream = null; }
+    signVideo.srcObject = null; $('signStart').textContent = '▶ Camera starten';
+  }
+  $('signStart').onclick = () => signStream ? stopSign() : startSign();
+  $('signSwitch').onclick = async () => { signFacing = signFacing === 'user' ? 'environment' : 'user'; store.set('sign.facing', signFacing); if (signStream) { stopSign(); await startSign(); } };
+
+  // kenmerken: 21 landmarks -> genormaliseerd (pols op 0, schaal = pols→middelhandbeentje 9, gedraaid zodat die as omhoog wijst, linkerhand gespiegeld)
+  function features(lm, handedness) {
+    const w = lm[0], m = lm[9];
+    let dx = m.x - w.x, dy = m.y - w.y; const scale = Math.hypot(dx, dy) || 1e-6;
+    const ang = Math.atan2(dy, dx) + Math.PI / 2; const ca = Math.cos(-ang), sa = Math.sin(-ang);
+    const mirror = handedness === 'Left' ? -1 : 1;
+    const f = [];
+    for (const p of lm) {
+      const x = (p.x - w.x) / scale, y = (p.y - w.y) / scale, z = (p.z || 0) / scale;
+      const rx = x * ca - y * sa, ry = x * sa + y * ca;
+      f.push(rx * mirror, ry, z * 0.5);
+    }
+    return f;
+  }
+  function classify(f) {
+    const labels = Object.keys(classes);
+    if (!labels.length) return null;
+    const cands = [];
+    for (const l of labels) for (const s of classes[l]) { let d = 0; for (let i = 0; i < f.length; i++) { const t = f[i] - s[i]; d += t * t; } cands.push({ l, d: Math.sqrt(d) }); }
+    cands.sort((a, b) => a.d - b.d);
+    const k = Math.min(7, cands.length); const votes = {};
+    for (let i = 0; i < k; i++) votes[cands[i].l] = (votes[cands[i].l] || 0) + 1;
+    const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+    const strict = +$('signStrict').value; // 10..90
+    const maxDist = 2.6 - strict * 0.022; // 0.62..2.4
+    const conf = best[1] / k;
+    if (cands[0].d > maxDist || conf < 0.5) return { l: null, conf, d: cands[0].d };
+    return { l: best[0], conf, d: cands[0].d };
+  }
+  const HAND_EDGES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  function onHands(r) {
+    const rect = signOverlay.getBoundingClientRect();
+    signOverlay.width = Math.round(rect.width); signOverlay.height = Math.round(rect.height);
+    const ctx = signOverlay.getContext('2d'); ctx.clearRect(0, 0, signOverlay.width, signOverlay.height);
+    const vw = signVideo.videoWidth, vh = signVideo.videoHeight;
+    const s = Math.min(signOverlay.width / vw, signOverlay.height / vh), ox = (signOverlay.width - vw * s) / 2, oy = (signOverlay.height - vh * s) / 2;
+    const lms = r.multiHandLandmarks;
+    if (!lms || !lms.length) { lastFeat = null; updateSign(null); return; }
+    const lm = lms[0], hd = r.multiHandedness && r.multiHandedness[0] ? r.multiHandedness[0].label : 'Right';
+    ctx.strokeStyle = 'rgba(80,220,140,.9)'; ctx.lineWidth = 3; ctx.fillStyle = '#fff';
+    for (const [a, b] of HAND_EDGES) { ctx.beginPath(); ctx.moveTo(ox + lm[a].x * vw * s, oy + lm[a].y * vh * s); ctx.lineTo(ox + lm[b].x * vw * s, oy + lm[b].y * vh * s); ctx.stroke(); }
+    for (const p of lm) { ctx.beginPath(); ctx.arc(ox + p.x * vw * s, oy + p.y * vh * s, 4, 0, Math.PI * 2); ctx.fill(); }
+    lastFeat = features(lm, hd);
+    if (recording) { recSamples.push(lastFeat); }
+    updateSign(classify(lastFeat));
+  }
+  function updateSign(pred) {
+    const now = performance.now();
+    const hold = +$('signHold').value;
+    const label = pred && pred.l ? pred.l : null;
+    if (label !== signState.label) { signState.label = label; signState.since = now; if (label === null) signState.committed = null; }
+    const p = label ? Math.min(100, (now - signState.since) / hold * 100) : 0;
+    $('signRing').style.setProperty('--p', p);
+    $('signLetter').textContent = label ? (label.length > 3 ? label.slice(0, 3) : label) : (pred ? '?' : '–');
+    $('signConf').textContent = !pred ? (Object.keys(classes).length ? 'wacht op hand' : 'nog geen gebaren aangeleerd') : label ? `${label} · ${Math.round(pred.conf * 100)}%` : 'onbekend gebaar';
+    if (label && p >= 100 && signState.committed !== label) {
+      signState.committed = label; commitSign(label);
+    }
+  }
+  function commitSign(label) {
+    if (label === 'spatie') signState.buffer += ' ';
+    else if (label === 'wis') signState.buffer = signState.buffer.slice(0, -1);
+    else signState.buffer += (label.length === 1 ? label : (signState.buffer && !signState.buffer.endsWith(' ') ? ' ' : '') + label + ' ');
+    renderSignText(); if (navigator.vibrate) navigator.vibrate(30);
+  }
+  function renderSignText() { $('signText').textContent = signState.buffer; $('signBraille').textContent = B.textToBraille(signState.buffer); }
+  $('signSpace').onclick = () => { signState.buffer += ' '; renderSignText(); };
+  $('signBack').onclick = () => { signState.buffer = signState.buffer.slice(0, -1); renderSignText(); };
+  $('signClear').onclick = () => { signState.buffer = ''; renderSignText(); };
+  $('signSpeak').onclick = () => speak(signState.buffer);
+  $('signCopy').onclick = () => copyText(signState.buffer);
+  $('signSave').onclick = () => saveHistory('gebaren', B.textToBraille(signState.buffer), signState.buffer);
+  $('signHold').oninput = () => $('signHoldVal').textContent = (+$('signHold').value / 1000).toFixed(1).replace('.', ',');
+  $('signStrict').oninput = () => $('signStrictVal').textContent = $('signStrict').value;
+
+  // trainen
+  var recording = false, recSamples = [];
+  function renderClasses() {
+    const el = $('trainClasses'); el.innerHTML = '';
+    const labels = Object.keys(classes).sort();
+    if (!labels.length) el.innerHTML = '<span class="status">Nog geen gebaren aangeleerd.</span>';
+    for (const l of labels) {
+      const c = document.createElement('span'); c.className = 'chip';
+      c.innerHTML = `<b></b> <small>${classes[l].length}×</small><button title="Verwijder ${l}" aria-label="Verwijder ${l}">✕</button>`;
+      c.querySelector('b').textContent = l;
+      c.querySelector('button').onclick = () => { delete classes[l]; store.set('sign.classes', classes); renderClasses(); };
+      el.appendChild(c);
+    }
+    const dl = $('trainList'); dl.innerHTML = '';
+    const sugg = [...new Set(['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','spatie','wis','hallo','dank je','ja','nee', ...labels])];
+    for (const s of sugg) { const o = document.createElement('option'); o.value = s; dl.appendChild(o); }
+  }
+  $('trainRec').onclick = () => {
+    const label = $('trainLabel').value.trim().toLowerCase();
+    if (!label) return toast('Geef eerst een label op');
+    if (!signStream) return toast('Start eerst de camera');
+    let n = 3; $('trainStatus').textContent = `Houd het gebaar “${label}” klaar… ${n}`;
+    const cd = setInterval(() => {
+      n--; if (n > 0) { $('trainStatus').textContent = `Houd het gebaar “${label}” klaar… ${n}`; return; }
+      clearInterval(cd);
+      recording = true; recSamples = []; $('trainStatus').textContent = 'Opnemen… houd stil';
+      setTimeout(() => {
+        recording = false;
+        // dun uit tot max 25 samples per opname
+        const step = Math.max(1, Math.floor(recSamples.length / 25));
+        const picked = recSamples.filter((_, i) => i % step === 0).slice(0, 25);
+        if (!picked.length) { $('trainStatus').textContent = 'Geen hand gezien — probeer opnieuw.'; return; }
+        classes[label] = (classes[label] || []).concat(picked).slice(-120);
+        store.set('sign.classes', classes); renderClasses();
+        $('trainStatus').textContent = `“${label}” opgeslagen (${picked.length} voorbeelden, totaal ${classes[label].length}).`;
+      }, 2000);
+    }, 700);
+  };
+  $('trainExport').onclick = () => {
+    const blob = new Blob([JSON.stringify({ version: 1, classes })], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'gebaren.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $('trainImport').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const j = JSON.parse(await f.text()); const c = j.classes || j; let n = 0;
+      for (const [l, arr] of Object.entries(c)) { if (!Array.isArray(arr)) continue; classes[l] = (classes[l] || []).concat(arr.filter(x => Array.isArray(x) && x.length === 63)).slice(-120); n++; }
+      store.set('sign.classes', classes); renderClasses(); toast(`${n} gebaren geïmporteerd`);
+    } catch { toast('Ongeldig bestand'); }
+    e.target.value = '';
+  };
+  $('trainClear').onclick = () => { if (confirm('Alle aangeleerde gebaren wissen?')) { classes = {}; store.set('sign.classes', classes); renderClasses(); } };
+  renderClasses();
+
+  /* ---------- start ---------- */
+  showTab(store.get('braille.tab', 'camera') === 'gebaren' ? 'gebaren' : 'camera');
+  if (location.protocol === 'file:') $('camHint').textContent += ' (Werkt de camera niet vanaf een lokaal bestand? Open de app dan via https of gebruik het tabblad Foto.)';
+})();
+
+</script>
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker niet geregistreerd', e));
+}
+// Installeerknop (Android/Chrome/Edge)
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredInstall = e;
+  const b = document.getElementById('installBtn'); if (b) { b.hidden = false; b.onclick = async () => { deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; b.hidden = true; }; }
+});
+</script>
+</body>
+</html>
